@@ -1,0 +1,10 @@
+[package]
+name = "os-unfair-lock"
+version = "0.1.0"
+authors = ["comex <comexk@gmail.com>"]
+edition = "2018"
+
+[features]
+nightly = []
+
+[dependencies]
