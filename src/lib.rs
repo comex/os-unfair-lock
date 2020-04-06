@@ -155,7 +155,7 @@ impl<'a, T: ?Sized, U: ?Sized> core::ops::CoerceUnsized<MutexGuard<'a, U>> for M
 
 #[cfg(test)]
 mod tests {
-    use super::{Mutex, MutexGuard};
+    use super::Mutex;
     const TEST_CONST: Mutex<u32> = Mutex::new(42);
     #[test]
     fn basics() {
@@ -169,6 +169,7 @@ mod tests {
     #[test]
     #[cfg(feature = "nightly")]
     fn unsize() {
+        use super::MutexGuard;
         let m: Mutex<[u8; 1]> = Mutex::new([100]);
         (&m as &Mutex<[u8]>).lock()[0] += 1;
         (m.lock() as MutexGuard<'_, [u8]>)[0] += 1;
