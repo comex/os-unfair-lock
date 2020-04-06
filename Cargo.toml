@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["comex <comexk@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0 OR 0BSD"
+description = "simple wrapper for Darwin os_unfair_lock"
 
 [features]
 nightly = []

@@ -1,4 +1,4 @@
-#![cfg(target_os = "macos")]
+#![cfg(any(target_os = "macos", target_os = "ios"))]
 #![no_std]
 #![cfg_attr(feature = "nightly", feature(coerce_unsized, unsize))]
 
@@ -161,7 +161,11 @@ mod tests {
     fn basics() {
         let m = TEST_CONST;
         *m.lock() += 1;
-        *m.try_lock().unwrap() += 1;
+        {
+            let mut g = m.try_lock().unwrap();
+            *g += 1;
+            assert!(m.try_lock().is_none());
+        }
         m.assert_not_owner();
         assert_eq!(*m.lock(), 44);
         assert_eq!(m.into_inner(), 44);
