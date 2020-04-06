@@ -2,10 +2,10 @@
 #![no_std]
 #![cfg_attr(feature = "nightly", feature(coerce_unsized, unsize))]
 
-use core::ops::{Deref, DerefMut, Drop};
 use core::cell::UnsafeCell;
 use core::default::Default;
 use core::fmt::{self, Debug, Display, Formatter};
+use core::ops::{Deref, DerefMut, Drop};
 
 #[allow(non_camel_case_types)]
 type os_unfair_lock = u32;
@@ -34,7 +34,10 @@ unsafe impl<T: ?Sized + Send> Send for Mutex<T> {}
 
 impl<T: ?Sized> Mutex<T> {
     #[inline]
-    pub const fn new(value: T) -> Self where T: Sized {
+    pub const fn new(value: T) -> Self
+    where
+        T: Sized,
+    {
         Mutex {
             lock: OS_UNFAIR_LOCK_INIT,
             cell: UnsafeCell::new(value),
@@ -42,20 +45,31 @@ impl<T: ?Sized> Mutex<T> {
     }
     #[inline]
     pub fn lock<'a>(&'a self) -> MutexGuard<'a, T> {
-        unsafe { os_unfair_lock_lock(&self.lock); }
+        unsafe {
+            os_unfair_lock_lock(&self.lock);
+        }
         MutexGuard { mutex: self }
     }
     #[inline]
     pub fn try_lock<'a>(&'a self) -> Option<MutexGuard<'a, T>> {
         let ok = unsafe { os_unfair_lock_trylock(&self.lock) };
-        if ok != 0 { Some(MutexGuard { mutex: self }) } else { None }
+        if ok != 0 {
+            Some(MutexGuard { mutex: self })
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn assert_not_owner(&self) {
-        unsafe { os_unfair_lock_assert_not_owner(&self.lock); }
+        unsafe {
+            os_unfair_lock_assert_not_owner(&self.lock);
+        }
     }
     #[inline]
-    pub fn into_inner(self) -> T where T: Sized {
+    pub fn into_inner(self) -> T
+    where
+        T: Sized,
+    {
         self.cell.into_inner()
     }
 }
@@ -78,7 +92,9 @@ impl<'a, T: ?Sized> DerefMut for MutexGuard<'a, T> {
 impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
     #[inline]
     fn drop(&mut self) {
-        unsafe { os_unfair_lock_unlock(&self.mutex.lock); }
+        unsafe {
+            os_unfair_lock_unlock(&self.mutex.lock);
+        }
     }
 }
 
@@ -113,8 +129,7 @@ impl<T> From<T> for Mutex<T> {
 }
 
 #[cfg(feature = "nightly")]
-impl<T, U> core::ops::CoerceUnsized<Mutex<U>> for Mutex<T>
-    where T: core::ops::CoerceUnsized<U> {}
+impl<T, U> core::ops::CoerceUnsized<Mutex<U>> for Mutex<T> where T: core::ops::CoerceUnsized<U> {}
 
 // extra impls: MutexGuard
 
@@ -133,8 +148,10 @@ impl<'a, T: ?Sized + Display> Display for MutexGuard<'a, T> {
 }
 
 #[cfg(feature = "nightly")]
-impl<'a, T: ?Sized, U: ?Sized> core::ops::CoerceUnsized<MutexGuard<'a, U>> for MutexGuard<'a, T>
-    where T: core::marker::Unsize<U> {}
+impl<'a, T: ?Sized, U: ?Sized> core::ops::CoerceUnsized<MutexGuard<'a, U>> for MutexGuard<'a, T> where
+    T: core::marker::Unsize<U>
+{
+}
 
 #[cfg(test)]
 mod tests {
