@@ -6,6 +6,7 @@ use core::cell::UnsafeCell;
 use core::default::Default;
 use core::fmt::{self, Debug, Display, Formatter};
 use core::ops::{Deref, DerefMut, Drop};
+use core::marker::PhantomData;
 
 #[allow(non_camel_case_types)]
 type os_unfair_lock = u32;
@@ -25,8 +26,12 @@ pub struct Mutex<T: ?Sized> {
     pub cell: UnsafeCell<T>,
 }
 
+struct CantSendMutexGuardBetweenThreads;
+
 pub struct MutexGuard<'a, T: ?Sized> {
     pub mutex: &'a Mutex<T>,
+    // could just be *const (), but this produces a better error message
+    pd: PhantomData<*const CantSendMutexGuardBetweenThreads>,
 }
 
 unsafe impl<T: ?Sized + Send> Sync for Mutex<T> {}
@@ -48,13 +53,13 @@ impl<T: ?Sized> Mutex<T> {
         unsafe {
             os_unfair_lock_lock(&self.lock);
         }
-        MutexGuard { mutex: self }
+        MutexGuard { mutex: self, pd: PhantomData }
     }
     #[inline]
     pub fn try_lock<'a>(&'a self) -> Option<MutexGuard<'a, T>> {
         let ok = unsafe { os_unfair_lock_trylock(&self.lock) };
         if ok != 0 {
-            Some(MutexGuard { mutex: self })
+            Some(MutexGuard { mutex: self, pd: PhantomData })
         } else {
             None
         }
@@ -73,6 +78,10 @@ impl<T: ?Sized> Mutex<T> {
         self.cell.into_inner()
     }
 }
+
+// It's (potentially) Sync but not Send, because os_unfair_lock_unlock must be called from the
+// locking thread.
+unsafe impl<'a, T: ?Sized + Sync> Sync for MutexGuard<'a, T> {}
 
 impl<'a, T: ?Sized> Deref for MutexGuard<'a, T> {
     type Target = T;
