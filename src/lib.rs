@@ -5,24 +5,31 @@
 use core::cell::UnsafeCell;
 use core::default::Default;
 use core::fmt::{self, Debug, Display, Formatter};
-use core::ops::{Deref, DerefMut, Drop};
 use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut, Drop};
 
 #[allow(non_camel_case_types)]
-type os_unfair_lock = u32;
+pub mod sys {
+    #[repr(C)]
+    pub struct os_unfair_lock(pub u32);
 
-const OS_UNFAIR_LOCK_INIT: os_unfair_lock = 0;
+    pub type os_unfair_lock_t = *mut os_unfair_lock;
+    pub type os_unfair_lock_s = os_unfair_lock;
 
-extern "C" {
-    // part of libSystem, no link needed
-    fn os_unfair_lock_lock(lock: &os_unfair_lock);
-    fn os_unfair_lock_unlock(lock: &os_unfair_lock);
-    fn os_unfair_lock_trylock(lock: &os_unfair_lock) -> u8;
-    fn os_unfair_lock_assert_not_owner(lock: &os_unfair_lock);
+    pub const OS_UNFAIR_LOCK_INIT: os_unfair_lock = os_unfair_lock(0);
+
+    extern "C" {
+        // part of libSystem, no link needed
+        pub fn os_unfair_lock_lock(lock: os_unfair_lock_t);
+        pub fn os_unfair_lock_unlock(lock: os_unfair_lock_t);
+        pub fn os_unfair_lock_trylock(lock: os_unfair_lock_t) -> bool;
+        pub fn os_unfair_lock_assert_owner(lock: os_unfair_lock_t);
+        pub fn os_unfair_lock_assert_not_owner(lock: os_unfair_lock_t);
+    }
 }
 
 pub struct Mutex<T: ?Sized> {
-    pub lock: os_unfair_lock,
+    pub lock: UnsafeCell<sys::os_unfair_lock>,
     pub cell: UnsafeCell<T>,
 }
 
@@ -44,22 +51,28 @@ impl<T: ?Sized> Mutex<T> {
         T: Sized,
     {
         Mutex {
-            lock: OS_UNFAIR_LOCK_INIT,
+            lock: UnsafeCell::new(sys::OS_UNFAIR_LOCK_INIT),
             cell: UnsafeCell::new(value),
         }
     }
     #[inline]
     pub fn lock<'a>(&'a self) -> MutexGuard<'a, T> {
         unsafe {
-            os_unfair_lock_lock(&self.lock);
+            sys::os_unfair_lock_lock(self.lock.get());
         }
-        MutexGuard { mutex: self, pd: PhantomData }
+        MutexGuard {
+            mutex: self,
+            pd: PhantomData,
+        }
     }
     #[inline]
     pub fn try_lock<'a>(&'a self) -> Option<MutexGuard<'a, T>> {
-        let ok = unsafe { os_unfair_lock_trylock(&self.lock) };
-        if ok != 0 {
-            Some(MutexGuard { mutex: self, pd: PhantomData })
+        let ok = unsafe { sys::os_unfair_lock_trylock(self.lock.get()) };
+        if ok {
+            Some(MutexGuard {
+                mutex: self,
+                pd: PhantomData,
+            })
         } else {
             None
         }
@@ -67,7 +80,7 @@ impl<T: ?Sized> Mutex<T> {
     #[inline]
     pub fn assert_not_owner(&self) {
         unsafe {
-            os_unfair_lock_assert_not_owner(&self.lock);
+            sys::os_unfair_lock_assert_not_owner(self.lock.get());
         }
     }
     #[inline]
@@ -102,7 +115,7 @@ impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            os_unfair_lock_unlock(&self.mutex.lock);
+            sys::os_unfair_lock_unlock(self.mutex.lock.get());
         }
     }
 }
